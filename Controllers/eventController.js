@@ -1,4 +1,4 @@
-const EVENT = require("../models/Event");
+const EVENT = require("../Models/Event");
 const mongoose = require("mongoose");
 
 const createEvent = async (req, res) => {
