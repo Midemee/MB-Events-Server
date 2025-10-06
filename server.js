@@ -10,8 +10,8 @@ const eventRouter = require("./Routes/eventRouter")
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const allowedOrigins = [
-    "http://localhost:5173/",
-    "https://mb-events-indol.vercel.app/"
+    "http://localhost:5173",
+    "https://mb-events-indol.vercel.app"
 ]
 app.use(cors({
     origin : (origin,callback)=>{
@@ -21,6 +21,7 @@ app.use(cors({
             callback(new Error("Not allowed by CORS"))
         }
     },
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials : true
 }))
 
