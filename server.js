@@ -7,10 +7,21 @@ const userRouter = require("./Routes/userRouter")
 const eventRouter = require("./Routes/eventRouter")
 
 
-
-
 app.use(express.json())
-app.use(cors())
+const allowedOrigins = [
+    "http://localhost:5173/",
+    "https://mb-events-indol.vercel.app/"
+]
+app.use(cors({
+    origin : (origin,callback)=>{
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null,true)  
+        }else{
+            callback(new Error("Not allowed by CORS"))
+        }
+    },
+    credentials : true
+}))
 
 //test route
 app.get("/",(req,res)=>{
