@@ -4,81 +4,93 @@ const NodeGeocoder = require("node-geocoder");
 const geocoder = NodeGeocoder({ provider: "openstreetmap" });
 
 const createEvent = async (req, res) => {
+  console.log("Incoming create event request");
+  const {
+    date,
+    title,
+    host,
+    timeStart,
+    timeEnd,
+    location,
+    online,
+    description,
+    category,
+    tags,
+    free,
+    regularEnabled,
+    regular,
+    vip,
+    vipEnabled,
+  } = req.body;
+
+  const isOnline = online === "true";
+  const isFree = free === "true";
+  const isRegularEnabled = regularEnabled === "true";
+  const isVipEnabled = vipEnabled === "true";
+  const parsedTags = JSON.parse(tags || "[]");
+
   try {
-    console.log("Incoming create event request");
-    const decodedUser = req.user;
-    console.log("Authenticated user:", decodedUser);
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ message: "Unauthorized. Please log in." });
+    }
 
-    const {
-      photo,
-      title,
-      host,
-      date,
-      timeStart,
-      timeEnd,
-      location,
-      online,
-      description,
-      category,
-      tags,
-      free,
-      regular,
-      vip,
-      regularEnabled,
-      vipEnabled,
-    } = req.body;
+    if (!title || !host || !date || !timeStart || !timeEnd || !description || !category) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
 
-    let coordinates = [0, 0];
-    if (location && online === "false") {
-      try {
-        const geoData = await geocoder.geocode(location);
-        if (geoData.length > 0) {
-          coordinates = [geoData[0].longitude, geoData[0].latitude];
-        }
-      } catch (geoErr) {
-        console.warn("Geocoding failed, defaulting to [0,0]");
+    if (!isOnline && !location) {
+      return res.status(400).json({ message: "Location is required" });
+    }
+
+    if (!isFree) {
+      if (isRegularEnabled && (regular === undefined || regular < 0)) {
+        return res.status(400).json({ message: "Regular price is required" });
+      }
+      if (isVipEnabled && (vip === undefined || vip < 0)) {
+        return res.status(400).json({ message: "VIP price is required" });
       }
     }
 
+    const photoUrl = req.file?.path;
+    if (!photoUrl) {
+      return res.status(400).json({ message: "Event photo is required" });
+    }
+
     const newEvent = new EVENT({
-      photo,
+      photo: photoUrl,
       title,
-      host,
+      hostName: host,
       date,
       timeStart,
       timeEnd,
       location,
-      online: online === "true",
+      // location: "Lagos, Nigeria", // human-readable
+      locationCoords: {
+      type: "Point",
+      coordinates: [parseFloat(lng), parseFloat(lat)],
+      },
+      online: isOnline,
       description,
       category,
-      tags: JSON.parse(tags),
-      free: free === "true",
-      regular: regular || 0,
-      vip: vip || 0,
-      regularEnabled: regularEnabled === "true",
-      vipEnabled: vipEnabled === "true",
-      hostedBy: decodedUser.id,
-      createdBy: decodedUser.id,
-      locationCoords: {
-        type: "Point",
-        coordinates,
-      },
-      attendees: [],
+      tags: parsedTags,
+      free: isFree,
+      regular,
+      regularEnabled: isRegularEnabled,
+      vip,
+      vipEnabled: isVipEnabled,
+      createdBy: req.user.userId,
+      hostedBy: req.user.userId,
     });
 
     await newEvent.save();
+    console.log("Event created:", newEvent._id);
 
-    res.status(201).json({
-      message: "Event created successfully",
-      event: newEvent,
-    });
+    res.status(201).json({ message: "Event created successfully", event: newEvent });
   } catch (error) {
-    console.error("Error creating event:", error);
-    res.status(500).json({ message: "server error", error: error.message });
+    console.error("Error creating an event:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
-
-
 
 const getAllEvents = async (req, res) => {
   try {
@@ -126,15 +138,12 @@ const getNearbyEvents = async (req, res) => {
   },
 });
 
-
     res.status(200).json({ events });
   } catch (err) {
     console.error("Error fetching nearby events:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
-
-
 
 const getHostingEvents = async (req, res) => {
   console.log("Incoming hosting events request");
@@ -180,72 +189,6 @@ const getPreviousEvents = async (req, res) => {z
     res.status(500).json({ message: "Server error" });
   }
 };
-
-
-// const getSearchEvents = async (req, res) => {
-//   try {
-//     const {
-//       query,
-//       location,
-//       category,
-//       tags,
-//       minPrice,
-//       maxPrice,
-//       page = 1,
-//       limit = 10,
-//     } = req.query;
-
-//     const filter = {};
-
-//     if (query) {
-//       const regex = { $regex: query, $options: "i" };
-//       filter.$or = [
-//         { title: regex },
-//         { description: regex },
-//         { category: regex },
-//         { location: regex },
-//         { tags: regex },
-//       ];
-//     }
-
-//     if (location) {
-//       filter.location = { $regex: location, $options: "i" };
-//     }
-
-//     if (category) {
-//       filter.category = { $regex: category, $options: "i" };
-//     }
-
-//     if (tags) {
-//       filter.tags = { $in: tags.split(",").map((tag) => new RegExp(tag, "i")) };
-//     }
-
-//     if (minPrice || maxPrice) {
-//       filter.$or = filter.$or || [];
-//       const priceFilter = {};
-//       if (minPrice) priceFilter.$gte = Number(minPrice);
-//       if (maxPrice) priceFilter.$lte = Number(maxPrice);
-//       filter.$or.push({ regular: priceFilter }, { vip: priceFilter });
-//     }
-
-//     const skip = (page - 1) * limit;
-
-//     const [events, total] = await Promise.all([
-//       EVENT.find(filter).skip(skip).limit(Number(limit)).sort({ date: 1 }),
-//       EVENT.countDocuments(filter),
-//     ]);
-
-//     res.status(200).json({
-//       events,
-//       total,
-//       page: Number(page),
-//       pages: Math.ceil(total / limit),
-//     });
-//   } catch (err) {
-//     console.error("Error fetching search events:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
 
 const getSearchEvents = async (req, res) => {
   try {

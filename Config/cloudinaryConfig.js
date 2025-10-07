@@ -13,9 +13,8 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
     cloudinary,
     params: async (req, file) => {
-        let folder = "event/upload";
+        let folder = "event/uploads";
         let resourceType = "auto"; //Automatically detect file type
-
         return{
             folder,
             resource_type: resourceType,
